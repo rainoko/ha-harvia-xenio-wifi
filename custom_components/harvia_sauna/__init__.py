@@ -19,6 +19,7 @@ from .number import HarviaHumiditySetPoint
 from .api import HarviaSaunaAPI, HarviaApiError
 from .binary_sensor import HarviaDoorSensor
 from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.storage import Store
@@ -277,8 +278,10 @@ class HarviaWebsock:
 
 
     async def connect(self):
-        self.websocket_task = asyncio.create_task(self.start())
-        self.disconnect_task = asyncio.create_task(self.disconnect_periodically())  # Start de periodieke disconnectie
+        if self.disconnect_task is not None:
+            self.disconnect_task.cancel()
+        self.websocket_task = self.sauna.create_background_task(self.start(), f"websocket {self.endpoint}")
+        self.disconnect_task = self.sauna.create_background_task(self.disconnect_periodically(), f"websocket {self.endpoint} periodic reconnect")  # Start de periodieke disconnectie
 
     async def disconnect_periodically(self):
         while True:
@@ -293,7 +296,7 @@ class HarviaWebsock:
                 _LOGGER.debug("WebSocket is gesloten om opnieuw te verbinden.")
                 self.websocket = None
                 self.websocket_task.cancel()
-                self.websocket_task = asyncio.create_task(self.start())
+                self.websocket_task = self.sauna.create_background_task(self.start(), f"websocket {self.endpoint}")
 
 
     async def start(self):
@@ -325,7 +328,7 @@ class HarviaWebsock:
         await asyncio.sleep(min(2 ** self.reconnect_attempts, 60) + random.uniform(0, 1))
 
         self.reconnect_attempts += 1
-        self.websocket_task = asyncio.create_task(self.start())
+        self.websocket_task = self.sauna.create_background_task(self.start(), f"websocket {self.endpoint}")
 
     async def create_subscription(self):
 
@@ -418,6 +421,18 @@ class HarviaSauna:
         self.websockDeviceUser = None
         self.websockDataUser = None
         self.api = None
+        self.stopped = False
+
+    def create_background_task(self, coro, name: str) -> asyncio.Task | None:
+        """Create a task that is cancelled when the config entry is unloaded."""
+        if self.stopped:
+            coro.close()
+            return None
+        return self.config.async_create_background_task(self.hass, coro, f"{DOMAIN} {name}")
+
+    def stop(self):
+        """Prevent new background tasks; running ones are cancelled by the config entry."""
+        self.stopped = True
 
     async def async_setup(self, config: dict) -> bool:
         """Stel de Harvia Sauna component in op basis van configuration.yaml."""
@@ -439,7 +454,7 @@ class HarviaSauna:
             return False
 
         await self.update_devices()
-        self.hass.loop.create_task(self.check_connections())
+        self.create_background_task(self.check_connections(), "check connections")
         self.hass.data[DOMAIN]['api'] = self
 
         return True
@@ -562,7 +577,7 @@ class HarviaSauna:
         return  self.user_data
 
     async def check_connections(self):
-        while True:
+        while not self.stopped:
             _LOGGER.debug("Checking websocket connections: ")
             if self.websockDevice is None:
                 self.websockDevice = HarviaWebsock(self, 'device')
@@ -645,15 +660,11 @@ async def async_setup_entry(hass, entry):
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Handel het ontladen van een configuratie-entry."""
-    # Ontlaad platformen die deel uitmaken van de integratie
-    for entity_type in ENTITY_TYPES:
-        await hass.config_entries.async_forward_entry_unload(entry, entity_type)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, ENTITY_TYPES)
+    if unload_ok:
+        # Background tasks created via the entry are cancelled by HA after this returns.
+        harvia_sauna = hass.data[DOMAIN].pop('api', None)
+        if harvia_sauna is not None:
+            harvia_sauna.stop()
 
-    return True
-
-async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handel het herladen van een configuratie-entry."""
-    await async_unload_entry(hass, entry)
-    await async_setup_entry(hass, entry)
-
-    return True
+    return unload_ok
