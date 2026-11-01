@@ -11,6 +11,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .constants import DOMAIN, REGION
 
 _LOGGER = logging.getLogger('custom_component.harvia_sauna')
+AUTH_ERROR_CODES = ("NotAuthorizedException", "UserNotFoundException")
 
 class HarviaSaunaAPI:
     def __init__(self, username, password, hass):
@@ -60,6 +61,10 @@ class HarviaSaunaAPI:
                 lambda: u.authenticate(password=self.password)
             )
         except botocore.exceptions.ClientError as e:
+            # Only wrong credentials count as an auth failure; anything else
+            # (throttling, service errors) is raised so setup can be retried.
+            if e.response.get("Error", {}).get("Code") not in AUTH_ERROR_CODES:
+                raise
             _LOGGER.info("Authentication failed: " + str(e))
             return False
 

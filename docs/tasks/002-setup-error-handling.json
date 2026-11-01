@@ -1,5 +1,5 @@
 {
   "name": "setup-error-handling",
   "description": "async_setup_entry ignores HarviaSauna.async_setup() returning False and forwards platforms anyway, which then KeyError on hass.data[DOMAIN]['api']. Raise ConfigEntryAuthFailed on bad credentials and ConfigEntryNotReady on network/cloud errors so HA retries.",
-  "status": "todo"
+  "status": "done"
 }

@@ -8,6 +8,8 @@ import asyncio
 import json
 import uuid
 import random
+import aiohttp
+import botocore.exceptions
 
 
 from .switch import HarviaPowerSwitch, HarviaLightSwitch, HarviaFanSwitch, HarviaSteamerSwitch
@@ -18,6 +20,7 @@ from .api import HarviaSaunaAPI
 from .binary_sensor import HarviaDoorSensor
 from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.storage import Store
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import HVACMode
@@ -618,12 +621,23 @@ async def async_setup_entry(hass, entry):
     password = entry.data.get(CONF_PASSWORD)
 
     if not username or not password:
-        _LOGGER.error("Username or password not configured.")
-        return False
+        raise ConfigEntryAuthFailed("Username or password not configured.")
 
     storage = Store(hass, STORAGE_VERSION, STORAGE_KEY)
     harvia_sauna = HarviaSauna(hass, storage, entry)
-    await harvia_sauna.async_setup(entry)
+    try:
+        authenticated = await harvia_sauna.async_setup(entry)
+    except (
+        aiohttp.ClientError,
+        asyncio.TimeoutError,
+        botocore.exceptions.BotoCoreError,
+        botocore.exceptions.ClientError,
+    ) as err:
+        raise ConfigEntryNotReady(f"Unable to connect to Harvia cloud: {err}") from err
+
+    if not authenticated:
+        raise ConfigEntryAuthFailed("Invalid Harvia username or password.")
+
     await hass.config_entries.async_forward_entry_setups(entry, ENTITY_TYPES)
 
     return True
