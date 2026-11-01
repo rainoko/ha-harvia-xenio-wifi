@@ -23,26 +23,26 @@ class HarviaThermostat(HarviaEntity, ClimateEntity):
         self._attr_hvac_mode = HVACMode.OFF
 
     async def async_added_to_hass(self):
-        """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
+        """Register with the device and publish the current state."""
         await super().async_added_to_hass()
         self._device.thermostat = self
         await self._device.update_ha_devices()
 
     async def async_set_temperature(self, **kwargs):
-        """Stel de doeltemperatuur in."""
+        """Set the target temperature."""
         if (temperature := kwargs.get(ATTR_TEMPERATURE)) is not None:
             self._attr_target_temperature = temperature
             await self._device.set_target_temperature(int(temperature))
             self.async_write_ha_state()
 
     async def async_set_hvac_mode(self, hvac_mode):
-        """Stel de HVAC-modus in."""
+        """Set the HVAC mode (heat turns the sauna on, off turns it off)."""
         active = hvac_mode == HVACMode.HEAT
         await self._device.set_active(active)
         self._attr_hvac_mode = hvac_mode
         self.async_write_ha_state()
 
-        if self._device.powerSwitch is not None:
+        if self._device.powerSwitch is not None and self._device.powerSwitch.added:
             self._device.powerSwitch._is_on = active
             await self._device.powerSwitch.update_state()
 
@@ -56,14 +56,14 @@ class HarviaThermostat(HarviaEntity, ClimateEntity):
         self.async_write_ha_state()
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Set up de Harvia theromostats."""
+    """Set up the Harvia thermostats."""
     devices = await hass.data[DOMAIN]['api'].get_devices()
-    theromostats = []
+    thermostats = []
 
     for device in devices:
-        _LOGGER.debug(f"Loading theromostats for device: {device.name}")
-        device_theromostats = await device.get_thermostats()
-        for device_theromostat in device_theromostats:
-            theromostats.append(device_theromostat)
+        _LOGGER.debug(f"Loading thermostats for device: {device.name}")
+        device_thermostats = await device.get_thermostats()
+        for device_thermostat in device_thermostats:
+            thermostats.append(device_thermostat)
 
-    async_add_entities(theromostats, True)
+    async_add_entities(thermostats, True)

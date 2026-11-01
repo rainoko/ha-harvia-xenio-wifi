@@ -29,7 +29,7 @@ class HarviaSaunaAPI:
         self.token_data = None
 
     async def getEndpoints(self):
-        """Haalt endpoints op en slaat deze op als ze nog niet bestaan."""
+        """Fetch the service endpoints once and cache them."""
         _LOGGER.debug("Fetching endpoints.")
 
         if self.endpoints is None:
@@ -63,7 +63,7 @@ class HarviaSaunaAPI:
             return True
 
         u = await self.getClient()
-        """Authenticateert met de service en slaat de tokens op."""
+        """Log in with Cognito and store the tokens."""
         _LOGGER.debug("Authenticating")
         _LOGGER.debug("Using username: " + self.username)
 

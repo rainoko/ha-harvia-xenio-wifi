@@ -16,7 +16,7 @@ def unique_id_for(username: str) -> str:
 class HarviaSaunaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for your_component."""
 
-    VERSION = 1  # De versie van je config flow
+    VERSION = 1
 
     async def _async_validate(self, username: str, password: str) -> dict:
         """Try to log in; return form errors (empty when the credentials work)."""
@@ -36,11 +36,10 @@ class HarviaSaunaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle a flow initiated by the user."""
         errors = {}
 
-        # Controleer of we al een configuratie hebben
+        # Only one Harvia account can be configured
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
 
-        # Verwerk ingevulde gegevens
         if user_input is not None:
             await self.async_set_unique_id(unique_id_for(user_input[CONF_USERNAME]))
             self._abort_if_unique_id_configured()

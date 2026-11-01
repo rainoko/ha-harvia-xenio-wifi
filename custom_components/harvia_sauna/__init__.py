@@ -22,6 +22,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.components.climate.const import HVACMode
 from homeassistant.const import STATE_ON, STATE_OFF, CONF_USERNAME, CONF_PASSWORD
+from homeassistant.util.ssl import get_default_context
 
 ENTITY_TYPES = [ 'switch', 'climate',  'binary_sensor', 'sensor', 'number']
 # Consecutive failed reconnects before a websocket counts as down; planned reconnects don't count.
@@ -101,26 +102,26 @@ class HarviaDevice:
 
     async def update_ha_devices(self):
 
-        if self.lightSwitch is not None:
+        if self.lightSwitch is not None and self.lightSwitch.added:
             self.lightSwitch._is_on = self.lightsOn
             await self.lightSwitch.update_state()
 
-        if self.powerSwitch is not None:
+        if self.powerSwitch is not None and self.powerSwitch.added:
             self.powerSwitch._is_on = self.active
             await self.powerSwitch.update_state()
 
-        if self.steamerSwitch is not None:
+        if self.steamerSwitch is not None and self.steamerSwitch.added:
             self.steamerSwitch._is_on = self.steamOn
             await self.steamerSwitch.update_state()
 
-        if self.fanSwitch is not None:
+        if self.fanSwitch is not None and self.fanSwitch.added:
             self.fanSwitch._is_on = self.fanOn
             await self.fanSwitch.update_state()
 
 
         doorOpen = self.door_open()
 
-        if self.doorSensor is not None and doorOpen is not None:
+        if self.doorSensor is not None and self.doorSensor.added and doorOpen is not None:
             if doorOpen:
                 _LOGGER.debug("Door is open")
                 self.doorSensor._state = STATE_ON
@@ -133,11 +134,11 @@ class HarviaDevice:
             if sensor.added:
                 await sensor.update_state()
 
-        if self.humidityNumber is not None:
+        if self.humidityNumber is not None and self.humidityNumber.added:
             self.humidityNumber._state = self.targetRh
             await self.humidityNumber.update_state()
 
-        if self.thermostat is not None:
+        if self.thermostat is not None and self.thermostat.added:
             self.thermostat._attr_target_temperature = self.targetTemp
             self.thermostat._attr_current_temperature = self.currentTemp
 
@@ -188,7 +189,7 @@ class HarviaDevice:
         data = { 'name': self.name, 'active': self.active, 'lightsOn': self.lightsOn, 'SteamOn': self.steamOn,  'targetTemp': self.targetTemp,  'targetRh': self.targetRh, 'fanOn':  self.fanOn, 'heatUpTime': self.heatUpTime  }
 
         attributes_as_string = json.dumps(data, indent=4)
-        _LOGGER.debug(f"Device attributen: {attributes_as_string}")
+        _LOGGER.debug(f"Device attributes: {attributes_as_string}")
 
     async def get_binary_sensors(self) -> list:
 
@@ -318,7 +319,8 @@ class HarviaWebsock:
         loop = asyncio.get_running_loop()
         reconnect_at = loop.time() + self.reconnect_interval
 
-        async with websockets.connect(url, subprotocols=["graphql-ws"]) as websocket:
+        # HA's cached SSL context avoids loading certificates (blocking I/O) in the event loop.
+        async with websockets.connect(url, subprotocols=["graphql-ws"], ssl=get_default_context()) as websocket:
             self.websocket = websocket
             await websocket.send(json.dumps({'type': 'connection_init'}))
 
@@ -385,14 +387,13 @@ class HarviaWebsock:
         return "{\"query\":\"subscription Subscription($receiver: String!) {\\n  onStateUpdated(receiver: $receiver) {\\n    desired\\n    reported\\n    timestamp\\n    receiver\\n    __typename\\n  }\\n}\\n\",\"variables\":{\"receiver\":\""+receiver+"\"}}"
 
     async def handle_message(self, message):
-        """Verwerk en reageer op het ontvangen bericht."""
+        """Handle one message received on the websocket."""
         _LOGGER.debug("Websock " + self.endpoint +  " (User receveiver: " + str(self.user_receiver) + ") - received message: " + message)
-        data = json.loads(message)  # Veronderstelt dat het bericht in JSON-formaat is
-        # Voorbeeld: controleer of het bericht een specifiek type of inhoud heeft
+        data = json.loads(message)
         if data.get("type") == "ka":
-            _LOGGER.debug("Websock  " + self.endpoint +  " Hartslag ontvangen.")
+            _LOGGER.debug("Websock  " + self.endpoint +  " keep-alive received.")
         elif data.get('type') == 'connection_ack':
-            _LOGGER.debug("Websock connection_ack ontvangen")
+            _LOGGER.debug("Websock " + self.endpoint + " connection_ack received")
             self.reconnect_attempts = 0
             self.sauna.update_availability()
             if data.get('payload'):
@@ -407,7 +408,7 @@ class HarviaWebsock:
         elif data.get("type") == "error":
             _LOGGER.warning("Websock %s received error: %s", self.name, message)
         else:
-            _LOGGER.debug("Onbekend berichttype " + self.endpoint +  " ontvangen: " + message)
+            _LOGGER.debug("Websock " + self.endpoint + " unknown message type: " + message)
 
 class HarviaSauna:
 
@@ -464,7 +465,7 @@ class HarviaSauna:
         if await self.api.authenticate():
             _LOGGER.info("Harvia Sauna component setup completed.")
         else:
-            _LOGGER.info("Error! Could'nt authenticate!")
+            _LOGGER.warning("Authentication failed, check username and password.")
             return False
 
         await self.update_devices()
@@ -510,7 +511,7 @@ class HarviaSauna:
         deviceTree = await self.api.endpoint('device', query)
         if 'data' in deviceTree and 'getDeviceTree' in deviceTree['data']:
             devicesTreeData =  json.loads(deviceTree['data']['getDeviceTree'])
-            if devicesTreeData:  # Check of de lijst niet leeg is
+            if devicesTreeData:
                 devices = devicesTreeData[0]['c']
                 for device in devices:
                     deviceId = device['i']['name']
@@ -522,9 +523,9 @@ class HarviaSauna:
                     await deviceObject.update_data(latestDeviceData)
                     self.devices.append(deviceObject)
             else:
-                _LOGGER.error("Geen devices gevonden in de response.")
+                _LOGGER.error("No devices found in the device tree response.")
         else:
-            _LOGGER.error("Onverwachte structuur van de response: 'data' of 'getDeviceTree' niet gevonden.")
+            _LOGGER.error("Unexpected device tree response: 'data' or 'getDeviceTree' missing.")
 
 
     async def process_device_update(self, message: dict):
@@ -621,7 +622,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Handel het ontladen van een configuratie-entry."""
+    """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, ENTITY_TYPES)
     if unload_ok:
         # Background tasks created via the entry are cancelled by HA after this returns.

@@ -14,7 +14,7 @@ class HarviaPowerSwitch(HarviaEntity, SwitchEntity):
         return self._is_on
 
     async def async_added_to_hass(self):
-        """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
+        """Register with the device and publish the current state."""
         await super().async_added_to_hass()
         self._device.powerSwitch = self
         await self._device.update_ha_devices()
@@ -23,20 +23,18 @@ class HarviaPowerSwitch(HarviaEntity, SwitchEntity):
         self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs):
-        # Code om de sauna aan te zetten
         await self._device.set_active(True)
         self._is_on = True
         self.async_write_ha_state()
-        if self._device.thermostat is not None:
+        if self._device.thermostat is not None and self._device.thermostat.added:
             self._device.thermostat._attr_hvac_mode = HVACMode.HEAT
             await self._device.thermostat.update_state()
 
     async def async_turn_off(self, **kwargs):
-        # Code om de sauna uit te zetten
         await self._device.set_active(False)
         self._is_on = False
         self.async_write_ha_state()
-        if self._device.thermostat is not None:
+        if self._device.thermostat is not None and self._device.thermostat.added:
             self._device.thermostat._attr_hvac_mode = HVACMode.OFF
             await self._device.thermostat.update_state()
 
@@ -48,7 +46,7 @@ class HarviaLightSwitch(HarviaEntity, SwitchEntity):
 
 
     async def async_added_to_hass(self):
-        """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
+        """Register with the device and publish the current state."""
         await super().async_added_to_hass()
         self._device.lightSwitch = self
         await self._device.update_ha_devices()
@@ -61,13 +59,11 @@ class HarviaLightSwitch(HarviaEntity, SwitchEntity):
         return self._is_on
 
     async def async_turn_on(self, **kwargs):
-        # Code om de sauna aan te zetten
         await self._device.set_lights(True)
         self._is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs):
-        # Code om de sauna uit te zetten
         await self._device.set_lights(False)
         self._is_on = False
         self.async_write_ha_state()
@@ -80,7 +76,7 @@ class HarviaSteamerSwitch(HarviaEntity, SwitchEntity):
 
 
     async def async_added_to_hass(self):
-        """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
+        """Register with the device and publish the current state."""
         await super().async_added_to_hass()
         self._device.steamerSwitch = self
         await self._device.update_ha_devices()
@@ -93,13 +89,11 @@ class HarviaSteamerSwitch(HarviaEntity, SwitchEntity):
         return self._is_on
 
     async def async_turn_on(self, **kwargs):
-        # Code om de sauna aan te zetten
         await self._device.set_steamer(True)
         self._is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs):
-        # Code om de sauna uit te zetten
         await self._device.set_steamer(False)
         self._is_on = False
         self.async_write_ha_state()
@@ -112,7 +106,7 @@ class HarviaFanSwitch(HarviaEntity, SwitchEntity):
 
 
     async def async_added_to_hass(self):
-        """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
+        """Register with the device and publish the current state."""
         await super().async_added_to_hass()
         self._device.fanSwitch = self
         await self._device.update_ha_devices()
@@ -125,19 +119,17 @@ class HarviaFanSwitch(HarviaEntity, SwitchEntity):
         return self._is_on
 
     async def async_turn_on(self, **kwargs):
-        # Code om de sauna aan te zetten
         await self._device.set_fan(True)
         self._is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs):
-        # Code om de sauna uit te zetten
         await self._device.set_fan(False)
         self._is_on = False
         self.async_write_ha_state()
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Set up de Harvia switches."""
+    """Set up the Harvia switches."""
     devices = await hass.data[DOMAIN]['api'].get_devices()
     switches = []
 

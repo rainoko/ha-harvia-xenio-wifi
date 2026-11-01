@@ -81,13 +81,13 @@ class HarviaSensor(HarviaEntity, SensorEntity):
         self.async_write_ha_state()
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Set up de Harvia sensors."""
+    """Set up the Harvia sensors."""
     devices = await hass.data[DOMAIN]['api'].get_devices()
-    all_sensors = []  # Gebruik een andere variabele om verwarring te voorkomen
+    all_sensors = []
 
     for device in devices:
         _LOGGER.debug(f"Loading sensors for device: {device.name}")
-        device_sensors = await device.get_sensors()  # Verkrijg  sensors voor het huidige apparaat
-        all_sensors.extend(device_sensors)  # Voeg de verkregen sensors toe aan de lijst
+        device_sensors = await device.get_sensors()
+        all_sensors.extend(device_sensors)
 
     async_add_entities(all_sensors, True)
