@@ -1,5 +1,5 @@
 {
   "name": "door-sensor-statuscodes-crash",
   "description": "update_ha_devices does int(str(self.statusCodes)[1]) unconditionally (__init__.py:128). If statusCodes is None or short this raises ValueError, even before the door sensor exists. Guard it and only evaluate when statusCodes is valid.",
-  "status": "todo"
+  "status": "done"
 }

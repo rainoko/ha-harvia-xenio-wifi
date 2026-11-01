@@ -129,10 +129,10 @@ class HarviaDevice:
             await self.fanSwitch.update_state()
 
 
-        safetyStatus =  int(str(self.statusCodes)[1])
+        doorOpen = self.door_open()
 
-        if self.doorSensor is not None:
-            if safetyStatus == 9:
+        if self.doorSensor is not None and doorOpen is not None:
+            if doorOpen:
                 _LOGGER.debug("Door is open")
                 self.doorSensor._state = STATE_ON
             else:
@@ -157,6 +157,13 @@ class HarviaDevice:
             else:
                 self.thermostat._hvac_mode =  HVACMode.OFF
             await self.thermostat.update_state()
+
+    def door_open(self) -> bool | None:
+        """Door state from the second digit of statusCodes (9 = open); None if unknown."""
+        codes = str(self.statusCodes) if self.statusCodes is not None else ""
+        if len(codes) < 2 or not codes[1].isdigit():
+            return None
+        return codes[1] == "9"
 
     async def set_target_temperature(self, temp: int):
 
