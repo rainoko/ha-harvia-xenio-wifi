@@ -262,73 +262,81 @@ class HarviaDevice:
 
 
 class HarviaWebsock:
+    """One AppSync subscription, kept alive by a single supervised reconnect loop."""
 
     def __init__(self, sauna: HarviaSauna, endpoint: str, user_receiver: bool = False):
         self.sauna = sauna
         self.websocket = None
-        self.timeout = 300
-        self.reconnect_interval = 1800  # Herstelinterval in seconden
+        self.timeout = 300  # Keep-alive timeout, updated from connection_ack
+        self.reconnect_interval = 1800  # Reconnect periodically to refresh the subscription
         self.endpoint = endpoint
         self.endpoint_host = None
         self.reconnect_attempts = 0
         self.uuid = None
         self.user_receiver = user_receiver
-        self.websocket_task = None
-        self.disconnect_task = None  # Toegevoegde taak voor periodiek verbreken
+        self.task = None
 
+    @property
+    def name(self) -> str:
+        return f"{self.endpoint}{' (user)' if self.user_receiver else ''}"
 
-    async def connect(self):
-        if self.disconnect_task is not None:
-            self.disconnect_task.cancel()
-        self.websocket_task = self.sauna.create_background_task(self.start(), f"websocket {self.endpoint}")
-        self.disconnect_task = self.sauna.create_background_task(self.disconnect_periodically(), f"websocket {self.endpoint} periodic reconnect")  # Start de periodieke disconnectie
+    def start(self):
+        """Start the reconnect loop if it is not running."""
+        if self.task is None or self.task.done():
+            self.task = self.sauna.create_background_task(self.run(), f"websocket {self.name}")
 
-    async def disconnect_periodically(self):
-        while True:
-            await asyncio.sleep(self.reconnect_interval)
-            if self.websocket:
-                payload = {
-                    "id": self.uuid,
-                    "type": "stop"
-                }
-                await self.websocket.send(json.dumps(payload))
-                await self.websocket.close()
-                _LOGGER.debug("WebSocket is gesloten om opnieuw te verbinden.")
+    async def run(self):
+        """Keep the subscription connected until the integration is unloaded."""
+        while not self.sauna.stopped:
+            planned = False
+            try:
+                planned = await self.connect_and_listen()
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:  # Any failure must lead to a reconnect, not a dead task
+                _LOGGER.warning("Websocket %s error: %s", self.name, err)
+            finally:
                 self.websocket = None
-                self.websocket_task.cancel()
-                self.websocket_task = self.sauna.create_background_task(self.start(), f"websocket {self.endpoint}")
 
+            if planned:
+                continue
+            delay = min(2 ** self.reconnect_attempts, 60) + random.uniform(0, 1)
+            self.reconnect_attempts += 1
+            _LOGGER.debug("Websocket %s reconnecting in %.1f s", self.name, delay)
+            await asyncio.sleep(delay)
 
-    async def start(self):
-        """Probeer opnieuw verbinding te maken in geval van verbreking."""
-        try:
-            endpoint = await self.sauna.api.getWebsocketEndpoint(self.endpoint)
-            self.endpoint_host = endpoint['host']
-            self.uuid = str(uuid.uuid4())
+    async def connect_and_listen(self) -> bool:
+        """Connect and process messages. Returns True for a planned periodic reconnect."""
+        endpoint = await self.sauna.api.getWebsocketEndpoint(self.endpoint)
+        self.endpoint_host = endpoint['host']
+        self.uuid = str(uuid.uuid4())
 
-            url = await self.sauna.api.getWebsockUrlByEndpoint(self.endpoint)
-            payload = {'type': 'connection_init'}
-            _LOGGER.debug(f"Connecting websocket {self.endpoint}: {endpoint['wssUrl']}")
+        url = await self.sauna.api.getWebsockUrlByEndpoint(self.endpoint)
+        _LOGGER.debug(f"Connecting websocket {self.name}: {endpoint['wssUrl']}")
 
-            async with websockets.connect(url,  subprotocols=["graphql-ws"],) as self.websocket:
-                self.reconnect_attempts = 0
-                await self.websocket.send(json.dumps(payload))
+        loop = asyncio.get_running_loop()
+        reconnect_at = loop.time() + self.reconnect_interval
 
-                while True:
-                    message = await self.receive_message(self.websocket)
-                    if message:
-                        await self.handle_message(message)
-                    else:
-                        _LOGGER.error("Geen 'ka' bericht ontvangen binnen 5 minuten.")
-                        break  # Trigger de reconnect logica.
+        async with websockets.connect(url, subprotocols=["graphql-ws"]) as websocket:
+            self.websocket = websocket
+            await websocket.send(json.dumps({'type': 'connection_init'}))
 
-        except (websockets.exceptions.ConnectionClosedError, asyncio.TimeoutError) as e:
-                _LOGGER.error("Verbindingsfout: %s", e)
+            while True:
+                try:
+                    message = await asyncio.wait_for(websocket.recv(), self.timeout)
+                except asyncio.TimeoutError:
+                    _LOGGER.warning("Websocket %s: no keep-alive within %s s, reconnecting", self.name, self.timeout)
+                    return False
 
-        await asyncio.sleep(min(2 ** self.reconnect_attempts, 60) + random.uniform(0, 1))
+                await self.handle_message(message)
 
-        self.reconnect_attempts += 1
-        self.websocket_task = self.sauna.create_background_task(self.start(), f"websocket {self.endpoint}")
+                if loop.time() >= reconnect_at:
+                    _LOGGER.debug("Websocket %s: periodic reconnect", self.name)
+                    try:
+                        await websocket.send(json.dumps({"id": self.uuid, "type": "stop"}))
+                    except websockets.exceptions.ConnectionClosed:
+                        pass
+                    return True
 
     async def create_subscription(self):
 
@@ -384,27 +392,20 @@ class HarviaWebsock:
             _LOGGER.debug("Websock  " + self.endpoint +  " Hartslag ontvangen.")
         elif data.get('type') == 'connection_ack':
             _LOGGER.debug("Websock connection_ack ontvangen")
+            self.reconnect_attempts = 0
             if data.get('payload'):
                 self.timeout = data['payload']['connectionTimeoutMs']/1000
             await self.create_subscription()
         elif data.get("type") == "data":
             _LOGGER.debug("Websock " + self.endpoint +  " data message receiver: " + message)
-            if self.endpoint == 'device':
+            try:
                 await self.sauna.process_device_update(data)
-            elif self.endpoint == 'data':
-                await self.sauna.process_device_update(data)
+            except Exception:  # A malformed update must not drop the connection
+                _LOGGER.exception("Websock %s failed to process message: %s", self.name, message)
+        elif data.get("type") == "error":
+            _LOGGER.warning("Websock %s received error: %s", self.name, message)
         else:
             _LOGGER.debug("Onbekend berichttype " + self.endpoint +  " ontvangen: " + message)
-
-    async def receive_message(self,websocket):
-        """Wacht op een bericht met een maximale duur."""
-        try:
-            message = await asyncio.wait_for(websocket.recv(), self.timeout)
-            return message
-        except websockets.exceptions.ConnectionClosedError as e:
-            _LOGGER.error("WebSocket verbinding is gesloten: %s", e)
-        except asyncio.TimeoutError:
-            return None
 
 class HarviaSauna:
 
@@ -416,10 +417,7 @@ class HarviaSauna:
         self.devices = None
         self.user_data = None
         self.cognito = None
-        self.websockDevice = None
-        self.websockData = None
-        self.websockDeviceUser = None
-        self.websockDataUser = None
+        self.websockets = []
         self.api = None
         self.stopped = False
 
@@ -454,7 +452,7 @@ class HarviaSauna:
             return False
 
         await self.update_devices()
-        self.create_background_task(self.check_connections(), "check connections")
+        self.start_websockets()
         self.hass.data[DOMAIN]['api'] = self
 
         return True
@@ -576,50 +574,16 @@ class HarviaSauna:
         self.user_data = data['data']['getCurrentUserDetails']
         return  self.user_data
 
-    async def check_connections(self):
-        while not self.stopped:
-            _LOGGER.debug("Checking websocket connections: ")
-            if self.websockDevice is None:
-                self.websockDevice = HarviaWebsock(self, 'device')
-                await self.websockDevice.connect()
-
-            if self.websockDeviceUser is None:
-                self.websockDeviceUser = HarviaWebsock(self, 'device', True)
-                await self.websockDeviceUser.connect()
-
-            if self.websockData is None:
-                self.websockData = HarviaWebsock(self, 'data')
-                await self.websockData.connect()
-
-            if self.websockDataUser is None:
-                self.websockDataUser = HarviaWebsock(self, 'data', True)
-                await self.websockDataUser.connect()
-
-            if self.websockDevice and self.websockDevice.websocket_task.done():
-                _LOGGER.debug("WebSocket Device: NOT RUNNING. Reconnecting!")
-                await self.websockDevice.connect()
-            else:
-                _LOGGER.debug("\tWebsocket Device: RUNNING")
-
-            if self.websockDeviceUser and self.websockDeviceUser.websocket_task.done():
-                _LOGGER.debug("WebSocket Device  (user): NOT RUNNING. Reconnecting!")
-                await self.websockDeviceUser.connect()
-            else:
-                _LOGGER.debug("\tWebsocket Device  (user): RUNNING")
-
-            if self.websockData and self.websockData.websocket_task.done():
-                _LOGGER.debug("\tWebSocket Data: NOT RUNNING. Reconnecting!")
-                await self.websockData.connect()
-            else:
-                _LOGGER.debug("\tWebsocket Data: RUNNING")
-
-            if self.websockDataUser and self.websockDataUser.websocket_task.done():
-                _LOGGER.debug("\tWebSocket Data (user): NOT RUNNING. Reconnecting!")
-                await self.websockDataUser.connect()
-            else:
-                _LOGGER.debug("\tWebsocket Data  (user): RUNNING")
-
-            await asyncio.sleep(60)
+    def start_websockets(self):
+        """Subscribe to device state and data updates for both the organization and the user."""
+        self.websockets = [
+            HarviaWebsock(self, 'device'),
+            HarviaWebsock(self, 'device', True),
+            HarviaWebsock(self, 'data'),
+            HarviaWebsock(self, 'data', True),
+        ]
+        for websock in self.websockets:
+            websock.start()
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
