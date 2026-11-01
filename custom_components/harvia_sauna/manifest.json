@@ -1,17 +1,21 @@
 {
   "domain": "harvia_sauna",
   "name": "Harvia Sauna",
-  "version": "0.0.19",
-  "config_flow": true,
-  "documentation": "https://github.com/rainoko/ha-harvia-xenio-wifi/blob/main/README.md",
-  "issue_tracker": "https://github.com/rainoko/ha-harvia-xenio-wifi/issues",
-  "dependencies": [],
   "codeowners": [
-    "@rubenharms"
+    "@rainoko"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/rainoko/ha-harvia-xenio-wifi/blob/main/README.md",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/rainoko/ha-harvia-xenio-wifi/issues",
+  "loggers": [
+    "pycognito"
   ],
   "requirements": [
     "boto3>=1.34.69",
     "pycognito>=2024.2.0",
     "websockets>=12.0"
-  ]
+  ],
+  "version": "0.1.0"
 }
