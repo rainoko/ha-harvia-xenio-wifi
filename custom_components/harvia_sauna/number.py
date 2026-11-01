@@ -11,29 +11,13 @@ class HarviaHumiditySetPoint(HarviaEntity, NumberEntity):
         super().__init__(device, sauna, 'humidity_set_point', 'Steamer Humidity')
         self._state = None
         self._attr_icon = 'mdi:cloud-percent'
+        self._attr_native_min_value = 0
+        self._attr_native_max_value = 100
+        self._attr_native_step = 1
+        self._attr_native_unit_of_measurement = PERCENTAGE
 
     @property
-    def min_value(self):
-        """Return het minimum waarde van de vochtigheid die kan worden ingesteld."""
-        return 0  # Stel in op je minimum grenswaarde
-
-    @property
-    def max_value(self):
-        """Return het maximum waarde van de vochtigheid die kan worden ingesteld."""
-        return 140  # Stel in op je maximum grenswaarde
-
-    @property
-    def step(self):
-        """Return de stapgrootte van de vochtigheidsinstelling."""
-        return 1.0
-
-    @property
-    def unit_of_measurement(self):
-        """Return de eenheid van deze entiteit."""
-        return PERCENTAGE
-
-    @property
-    def value(self):
+    def native_value(self):
         """Return de huidige ingestelde waarde."""
         return self._state
 
@@ -46,10 +30,10 @@ class HarviaHumiditySetPoint(HarviaEntity, NumberEntity):
     async def update_state(self):
         self.async_write_ha_state()
 
-    async def async_set_value(self, value):
+    async def async_set_native_value(self, value: float):
         """Update de ingestelde waarde."""
-        self._state = value
-        await self._device.set_target_relative_humidity(value)
+        self._state = int(value)
+        await self._device.set_target_relative_humidity(int(value))
         self.async_write_ha_state()
 
 async def async_setup_entry(hass, entry, async_add_entities):
