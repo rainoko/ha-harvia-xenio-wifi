@@ -1,15 +1,12 @@
 from __future__ import annotations
-import json
-import asyncio
-import signal
-import websockets
 import asyncio
 import json
-import uuid
 import random
+import uuid
+
 import aiohttp
 import botocore.exceptions
-
+import websockets
 
 from .switch import HarviaPowerSwitch, HarviaLightSwitch, HarviaFanSwitch, HarviaSteamerSwitch
 from .climate import HarviaThermostat
@@ -18,18 +15,13 @@ from .number import HarviaHumiditySetPoint
 from .api import HarviaSaunaAPI, HarviaApiError
 from .binary_sensor import HarviaDoorSensor
 from .config_flow import unique_id_for
-from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
+from .constants import DOMAIN, _LOGGER
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.storage import Store
-from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import HVACMode
 from homeassistant.const import STATE_ON, STATE_OFF, CONF_USERNAME, CONF_PASSWORD
-
-from pycognito import Cognito
-import boto3
 
 ENTITY_TYPES = [ 'switch', 'climate',  'binary_sensor', 'sensor', 'number']
 # Consecutive failed reconnects before a websocket counts as down; planned reconnects don't count.
@@ -38,8 +30,6 @@ UNHEALTHY_AFTER_ATTEMPTS = 3
 class HarviaDevice:
     def __init__(self, sauna: HarviaSauna, id: str):
         self.sauna = sauna
-        self.data = {}
-        self.user  = None
         self.id = id
         self.active = False
         self.lightsOn = False
@@ -68,12 +58,9 @@ class HarviaDevice:
         self.numbers = None
         self.switches = None
         self.thermostats = None
-        self.lastestUpdate = None
 
 
     async def update_data(self, data: dict):
-        self.data = data
-
         _LOGGER.debug(f"Performing device update: " + json.dumps(data))
 
         if 'displayName' in data:
@@ -104,8 +91,6 @@ class HarviaDevice:
             self.currentTemp = data['temperature']
         if 'humidity' in data:
             self.humidity = data['humidity']
-        if 'timestamp' in data:
-            self.lastestUpdate = data['timestamp']
         if 'statusCodes' in data:
             if data['statusCodes'] != self.statusCodes:
                 _LOGGER.debug("StatusCodes changed: " +  str(data['statusCodes']))
@@ -426,14 +411,11 @@ class HarviaWebsock:
 
 class HarviaSauna:
 
-    def __init__(self, hass: HomeAssistant, storage: Store, config: dict):
+    def __init__(self, hass: HomeAssistant, config: ConfigEntry):
         self.hass = hass
-        self.storage = storage
         self.config = config
-        self.data = {}
         self.devices = None
         self.user_data = None
-        self.cognito = None
         self.websockets = []
         self.api = None
         self.stopped = False
@@ -468,11 +450,9 @@ class HarviaSauna:
         """Prevent new background tasks; running ones are cancelled by the config entry."""
         self.stopped = True
 
-    async def async_setup(self, config: dict) -> bool:
-        """Stel de Harvia Sauna component in op basis van configuration.yaml."""
+    async def async_setup(self) -> bool:
+        """Log in, load the devices and start the websocket subscriptions."""
         _LOGGER.info("Starting setup of Harvia Sauna component.")
-
-        self.data = await self.storage.async_load() or {}
 
         if DOMAIN not in self.hass.data:
             self.hass.data[DOMAIN] = {}
@@ -512,10 +492,6 @@ class HarviaSauna:
         deviceData['type'] = data['data']['getLatestData']['type']
         return deviceData
 
-    async def get_headers(self) -> dict:
-        _LOGGER.warning("get_headers is DEPRICATED use HarviaSaunaApi.getHeaders() instead.")
-        return await self.api.getHeaders()
-
     async def get_devices(self) -> list:
         if self.devices is None:
             await self.update_devices()
@@ -535,7 +511,6 @@ class HarviaSauna:
         if 'data' in deviceTree and 'getDeviceTree' in deviceTree['data']:
             devicesTreeData =  json.loads(deviceTree['data']['getDeviceTree'])
             if devicesTreeData:  # Check of de lijst niet leeg is
-                data_string = json.dumps(devicesTreeData, indent=4)
                 devices = devicesTreeData[0]['c']
                 for device in devices:
                     deviceId = device['i']['name']
@@ -567,7 +542,7 @@ class HarviaSauna:
             #{ "id": "898df439-408e-4d35-b7c6-9a5bc6d69e81", "type": "data", "payload": { "data": { "onDataUpdates": { "item": { "deviceId": "e0b84f32-9eb0-4add-aad5-8d50886b3a66", "timestamp": "1712161222726", "sessionId": "1", "type": "sauna", "data": "{\"targetTemp\":90,\"ph2RelayCounterLT\":0,\"remainingTime\":357,\"steamOn\":false,\"temperature\":27,\"humidity\":0,\"heatOn\":true,\"steamOnCounterLT\":0,\"steamOnCounter\":0,\"heatOnCounterLT\":0,\"heatOnCounter\":0,\"ph1RelayCounterLT\":1,\"ph3RelayCounterLT\":0,\"ph1RelayCounter\":1,\"ph3RelayCounter\":0,\"wifiRSSI\":-68,\"testVar1\":0,\"testVar2\":0,\"ph2RelayCounter\":0}", "__typename": "DataItem" }, "__typename": "UpdatedData" } } } }
             data = json.loads(message['payload']['data']['onDataUpdates']['item']['data'])
             data['timestamp'] = message['payload']['data']['onDataUpdates']['item']['timestamp']
-            data['type'] = message['payload']['data']['onDataUpdates']['item']
+            data['type'] = message['payload']['data']['onDataUpdates']['item']['type']
             deviceId =  message['payload']['data']['onDataUpdates']['item']['deviceId']
         else:
             return
@@ -589,14 +564,6 @@ class HarviaSauna:
                 }
         response = await self.api.endpoint('device', query)
         return response
-
-    async def get_client(self) -> Cognito:
-        if self.cognito == None:
-            await self.authenticate_and_save_tokens()
-        return self.cognito
-
-    async def websock_get_url(self, endpoint) -> str:
-        return await self.api.getWebsockUrlByEndpoint(endpoint)
 
     async def get_user_data(self):
         if self.user_data is not None:
@@ -622,16 +589,8 @@ class HarviaSauna:
             websock.start()
 
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Setup de Harvia Sauna integratie."""
-    return True
-
-async def async_setup_entry(hass, entry):
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Harvia Sauna from a config entry."""
-    _LOGGER.debug(f"Setup entry...")
-
-    """Setup een Harvia Sauna configuratie entry."""
-    # Haal de configuratiegegevens op die zijn opgeslagen door de config flow
     username = entry.data.get(CONF_USERNAME)
     password = entry.data.get(CONF_PASSWORD)
 
@@ -642,10 +601,9 @@ async def async_setup_entry(hass, entry):
         # Entries created before unique IDs were introduced
         hass.config_entries.async_update_entry(entry, unique_id=unique_id_for(username))
 
-    storage = Store(hass, STORAGE_VERSION, STORAGE_KEY)
-    harvia_sauna = HarviaSauna(hass, storage, entry)
+    harvia_sauna = HarviaSauna(hass, entry)
     try:
-        authenticated = await harvia_sauna.async_setup(entry)
+        authenticated = await harvia_sauna.async_setup()
     except (
         HarviaApiError,
         aiohttp.ClientError,

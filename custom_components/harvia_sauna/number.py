@@ -1,6 +1,6 @@
 from homeassistant.components.number import NumberEntity
 from homeassistant.const import PERCENTAGE
-from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
+from .constants import DOMAIN, _LOGGER
 from .entity import HarviaEntity
 
 class HarviaHumiditySetPoint(HarviaEntity, NumberEntity):

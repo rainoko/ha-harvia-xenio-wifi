@@ -1,5 +1,5 @@
 from homeassistant.components.switch import SwitchEntity
-from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
+from .constants import DOMAIN, _LOGGER
 from .entity import HarviaEntity
 from homeassistant.components.climate.const import HVACMode
 
@@ -138,8 +138,6 @@ class HarviaFanSwitch(HarviaEntity, SwitchEntity):
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up de Harvia switches."""
-    # Hier zou je de logica toevoegen om je apparaten op te halen.
-    # Voor nu voegen we handmatig een schakelaar toe als voorbeeld.
     devices = await hass.data[DOMAIN]['api'].get_devices()
     switches = []
 

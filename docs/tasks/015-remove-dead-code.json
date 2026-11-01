@@ -1,5 +1,5 @@
 {
   "name": "remove-dead-code",
   "description": "Remove HarviaSauna.get_client (calls nonexistent authenticate_and_save_tokens), deprecated get_headers, websock_get_url, unused Store, duplicate/unused imports (signal, json, asyncio, ClimateEntity), commented-out code, and stray files (.idea/, data_nl.txt).",
-  "status": "todo"
+  "status": "done"
 }

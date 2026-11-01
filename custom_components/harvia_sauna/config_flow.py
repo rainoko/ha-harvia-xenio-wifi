@@ -17,7 +17,6 @@ class HarviaSaunaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for your_component."""
 
     VERSION = 1  # De versie van je config flow
-    CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
     async def _async_validate(self, username: str, password: str) -> dict:
         """Try to log in; return form errors (empty when the credentials work)."""

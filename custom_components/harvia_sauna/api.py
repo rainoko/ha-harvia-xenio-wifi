@@ -1,7 +1,6 @@
 from pycognito import Cognito
 import aiohttp
 import asyncio
-import boto3
 import json
 import re
 import base64
@@ -10,7 +9,7 @@ from urllib.parse import quote
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .constants import DOMAIN, REGION, _LOGGER
+from .constants import REGION, _LOGGER
 
 AUTH_ERROR_CODES = ("NotAuthorizedException", "UserNotFoundException")
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)

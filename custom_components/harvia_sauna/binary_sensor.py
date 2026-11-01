@@ -2,8 +2,8 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorDeviceClass,
 )
-from homeassistant.const import STATE_ON, STATE_OFF
-from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
+from homeassistant.const import STATE_OFF
+from .constants import DOMAIN, _LOGGER
 from .entity import HarviaEntity
 
 class HarviaDoorSensor(HarviaEntity, BinarySensorEntity):
@@ -26,7 +26,6 @@ class HarviaDoorSensor(HarviaEntity, BinarySensorEntity):
             return False
         else:
             return True
-        #return self._state
 
     async def async_added_to_hass(self):
         """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
