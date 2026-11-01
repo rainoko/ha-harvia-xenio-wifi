@@ -1,6 +1,8 @@
+from collections.abc import Mapping
+from typing import Any
+
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.core import callback
 from homeassistant.const import CONF_USERNAME, CONF_PASSWORD
 from .api import HarviaSaunaAPI
 from .constants import DOMAIN  # Zorg ervoor dat je een const.py hebt met je DOMAIN
@@ -10,6 +12,13 @@ class HarviaSaunaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1  # De versie van je config flow
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
+
+    async def _async_validate(self, username: str, password: str) -> dict:
+        """Try to log in; return form errors (empty when the credentials work)."""
+        api = HarviaSaunaAPI(username, password, self.hass)
+        if not await api.authenticate():
+            return {"base": "invalid_auth"}
+        return {}
 
     async def async_step_user(self, user_input=None):
         """Handle a flow initiated by the user."""
@@ -21,13 +30,9 @@ class HarviaSaunaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Verwerk ingevulde gegevens
         if user_input is not None:
-            # Hier zou je de inloggegevens valideren
-            api =  HarviaSaunaAPI(user_input[CONF_USERNAME], user_input[CONF_PASSWORD],self.hass)
-            valid = await api.authenticate()
-            if valid:
+            errors = await self._async_validate(user_input[CONF_USERNAME], user_input[CONF_PASSWORD])
+            if not errors:
                 return self.async_create_entry(title="Harvia Sauna", data=user_input)
-            else:
-                errors["base"] = "invalid_auth"
 
         return self.async_show_form(
             step_id="user",
@@ -37,32 +42,46 @@ class HarviaSaunaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }),
             errors=errors,
         )
-    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
-        return HarviaSaunaOptionsFlowHandler(config_entry)
 
-class HarviaSaunaOptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
+    async def async_step_reauth(self, entry_data: Mapping[str, Any]):
+        """Started by HA when setup raises ConfigEntryAuthFailed."""
+        return await self.async_step_reauth_confirm()
 
-    async def async_step_init(self, user_input=None):
-        """Beheer de opties."""
+    async def async_step_reauth_confirm(self, user_input=None):
+        """Ask for a new password for the existing username."""
         errors = {}
+        entry = self._get_reauth_entry()
+        username = entry.data.get(CONF_USERNAME)
 
         if user_input is not None:
-            # Hier zou je de inloggegevens valideren
-            api =  HarviaSaunaAPI(user_input[CONF_USERNAME], user_input[CONF_PASSWORD],self.hass)
-            valid = await api.authenticate(user_input[CONF_USERNAME], user_input[CONF_PASSWORD])
-            if valid:
-                return self.async_create_entry(title="Harvia Sauna", data=user_input)
-            else:
-                errors["base"] = "invalid_auth"
+            errors = await self._async_validate(username, user_input[CONF_PASSWORD])
+            if not errors:
+                return self.async_update_reload_and_abort(
+                    entry, data_updates={CONF_PASSWORD: user_input[CONF_PASSWORD]}
+                )
 
         return self.async_show_form(
-            step_id="init",
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
+            description_placeholders={"username": username},
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(self, user_input=None):
+        """Change the username and password of the existing entry."""
+        errors = {}
+        entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            errors = await self._async_validate(user_input[CONF_USERNAME], user_input[CONF_PASSWORD])
+            if not errors:
+                return self.async_update_reload_and_abort(entry, data_updates=user_input)
+
+        return self.async_show_form(
+            step_id="reconfigure",
             data_schema=vol.Schema({
-                vol.Required(CONF_USERNAME, default=self.config_entry.data.get(CONF_USERNAME)): str,
-                vol.Required(CONF_PASSWORD, default=self.config_entry.data.get(CONF_PASSWORD)): str,
+                vol.Required(CONF_USERNAME, default=entry.data.get(CONF_USERNAME)): str,
+                vol.Required(CONF_PASSWORD): str,
             }),
-            errors=errors
+            errors=errors,
         )

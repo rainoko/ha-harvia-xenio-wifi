@@ -1,5 +1,5 @@
 {
   "name": "fix-options-flow",
   "description": "Options flow calls api.authenticate(user, pw) but the method takes no args (TypeError), sets self.config_entry explicitly (rejected by recent HA), saves credentials to options that are never read, and has no translations. Replace with a reauth/reconfigure flow that updates entry.data.",
-  "status": "todo"
+  "status": "done"
 }
