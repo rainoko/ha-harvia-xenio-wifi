@@ -23,6 +23,7 @@ from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import HVACMode
@@ -33,6 +34,8 @@ import boto3
 
 _LOGGER = logging.getLogger('custom_component.harvia_sauna')
 ENTITY_TYPES = [ 'switch', 'climate',  'binary_sensor', 'sensor', 'number']
+# Consecutive failed reconnects before a websocket counts as down; planned reconnects don't count.
+UNHEALTHY_AFTER_ATTEMPTS = 3
 
 class HarviaDevice:
     def __init__(self, sauna: HarviaSauna, id: str):
@@ -209,7 +212,7 @@ class HarviaDevice:
 
         self.binarySensors = []
 
-        binarySensor = HarviaDoorSensor(device=self, name=self.name, sauna=self.sauna)
+        binarySensor = HarviaDoorSensor(device=self, sauna=self.sauna)
         self.binarySensors.append(binarySensor)
 
         return self.binarySensors
@@ -222,7 +225,7 @@ class HarviaDevice:
 
         self.sensors = []
 
-        humiditySensor = HarviaHumiditySensor(device=self, name=self.name, sauna=self.sauna)
+        humiditySensor = HarviaHumiditySensor(device=self, sauna=self.sauna)
         self.sensors.append(humiditySensor)
 
         return self.sensors
@@ -234,7 +237,7 @@ class HarviaDevice:
 
         self.numbers = []
 
-        humidityNumber = HarviaHumiditySetPoint(device=self, name=self.name, sauna=self.sauna)
+        humidityNumber = HarviaHumiditySetPoint(device=self, sauna=self.sauna)
         self.numbers.append(humidityNumber)
 
         return self.numbers
@@ -245,7 +248,7 @@ class HarviaDevice:
 
         self.thermostats = []
 
-        thermostat = HarviaThermostat(device=self, name=self.name, sauna=self.sauna)
+        thermostat = HarviaThermostat(device=self, sauna=self.sauna)
         self.thermostats.append(thermostat)
 
         return self.thermostats
@@ -256,10 +259,10 @@ class HarviaDevice:
 
         self.switches = []
 
-        powerSwitch = HarviaPowerSwitch(device=self, name=self.name, sauna=self.sauna)
-        lightSwitch = HarviaLightSwitch(device=self, name=self.name, sauna=self.sauna)
-        steamerSwitch = HarviaSteamerSwitch(device=self, name=self.name, sauna=self.sauna)
-        fanSwitch = HarviaFanSwitch(device=self, name=self.name, sauna=self.sauna)
+        powerSwitch = HarviaPowerSwitch(device=self, sauna=self.sauna)
+        lightSwitch = HarviaLightSwitch(device=self, sauna=self.sauna)
+        steamerSwitch = HarviaSteamerSwitch(device=self, sauna=self.sauna)
+        fanSwitch = HarviaFanSwitch(device=self, sauna=self.sauna)
 
         self.switches.append(powerSwitch)
         self.switches.append(lightSwitch)
@@ -288,6 +291,10 @@ class HarviaWebsock:
     def name(self) -> str:
         return f"{self.endpoint}{' (user)' if self.user_receiver else ''}"
 
+    @property
+    def healthy(self) -> bool:
+        return self.reconnect_attempts < UNHEALTHY_AFTER_ATTEMPTS
+
     def start(self):
         """Start the reconnect loop if it is not running."""
         if self.task is None or self.task.done():
@@ -310,6 +317,7 @@ class HarviaWebsock:
                 continue
             delay = min(2 ** self.reconnect_attempts, 60) + random.uniform(0, 1)
             self.reconnect_attempts += 1
+            self.sauna.update_availability()
             _LOGGER.debug("Websocket %s reconnecting in %.1f s", self.name, delay)
             await asyncio.sleep(delay)
 
@@ -401,6 +409,7 @@ class HarviaWebsock:
         elif data.get('type') == 'connection_ack':
             _LOGGER.debug("Websock connection_ack ontvangen")
             self.reconnect_attempts = 0
+            self.sauna.update_availability()
             if data.get('payload'):
                 self.timeout = data['payload']['connectionTimeoutMs']/1000
             await self.create_subscription()
@@ -428,6 +437,25 @@ class HarviaSauna:
         self.websockets = []
         self.api = None
         self.stopped = False
+        self.signal_availability = f"{DOMAIN}_{config.entry_id}_availability"
+        self._last_available = True
+
+    @property
+    def available(self) -> bool:
+        """The cloud connection is up while at least one subscription is healthy."""
+        return not self.websockets or any(websock.healthy for websock in self.websockets)
+
+    def update_availability(self):
+        """Notify entities when the cloud connection goes down or comes back."""
+        available = self.available
+        if available == self._last_available:
+            return
+        self._last_available = available
+        if available:
+            _LOGGER.info("Connection to Harvia cloud restored")
+        else:
+            _LOGGER.warning("Connection to Harvia cloud lost, marking entities unavailable")
+        async_dispatcher_send(self.hass, self.signal_availability)
 
     def create_background_task(self, coro, name: str) -> asyncio.Task | None:
         """Create a task that is cancelled when the config entry is unloaded."""

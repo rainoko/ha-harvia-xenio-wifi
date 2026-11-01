@@ -4,24 +4,16 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.const import STATE_ON, STATE_OFF
 from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
+from .entity import HarviaEntity
 
-class HarviaDoorSensor(BinarySensorEntity):
+class HarviaDoorSensor(HarviaEntity, BinarySensorEntity):
     """Een sensor die aangeeft of de Harvia sauna deur open of gesloten is."""
 
-    def __init__(self, device, name, sauna):
+    def __init__(self, device, sauna):
         """Initialiseer de sensor."""
-        self._name = name + ' Door'
+        super().__init__(device, sauna, 'door_sensor', 'Door')
         self._state = STATE_OFF
-        self._device = device
-        self._device_id = device.id + '_door_sensor'
-        self._sauna = sauna
-        self._attr_unique_id = device.id + '_door_sensor'
         self._attr_icon = 'mdi:door'
-
-    @property
-    def name(self):
-        """Return de naam van de sensor."""
-        return self._name
 
     @property
     def device_class(self):
@@ -38,6 +30,7 @@ class HarviaDoorSensor(BinarySensorEntity):
 
     async def async_added_to_hass(self):
         """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
+        await super().async_added_to_hass()
         self._device.doorSensor = self
         await self._device.update_ha_devices()
 

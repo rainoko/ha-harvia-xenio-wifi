@@ -2,17 +2,14 @@ from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import HVACMode, ClimateEntityFeature
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
+from .entity import HarviaEntity
 
-class HarviaThermostat(ClimateEntity):
-    def __init__(self, device, name, sauna):
-        self._device = device
-        self._name = name + ' Thermostat'
+class HarviaThermostat(HarviaEntity, ClimateEntity):
+    def __init__(self, device, sauna):
+        super().__init__(device, sauna, 'termostat', 'Thermostat')
         self._current_temperature = None
         self._target_temperature = None
         self._hvac_mode = HVACMode.OFF
-        self._device_id = device.id + '_termostat'
-        self._sauna = sauna
-        self._attr_unique_id = device.id + '_termostat'
 
     @property
     def min_temp(self):
@@ -21,10 +18,6 @@ class HarviaThermostat(ClimateEntity):
     @property
     def max_temp(self):
         return 110
-
-    @property
-    def name(self):
-        return self._name
 
     @property
     def temperature_unit(self):
@@ -48,6 +41,7 @@ class HarviaThermostat(ClimateEntity):
 
     async def async_added_to_hass(self):
         """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
+        await super().async_added_to_hass()
         self._device.thermostat = self
         await self._device.update_ha_devices()
 

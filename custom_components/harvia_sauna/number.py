@@ -1,25 +1,16 @@
 from homeassistant.components.number import NumberEntity
 from homeassistant.const import PERCENTAGE
 from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
+from .entity import HarviaEntity
 
-class HarviaHumiditySetPoint(NumberEntity):
+class HarviaHumiditySetPoint(HarviaEntity, NumberEntity):
     """Representatie van een nummer entiteit om de gewenste vochtigheid in te stellen."""
 
-    def __init__(self, device, name, sauna):
+    def __init__(self, device, sauna):
         """Initialiseer de humidity number set point."""
-        self._name = name + ' Steamer Humidity'
+        super().__init__(device, sauna, 'humidity_set_point', 'Steamer Humidity')
         self._state = None
-        self._device = device
-        self._device_id = device.id + '_humidity_set_point'
-        self._sauna = sauna
-        self._attr_unique_id = device.id + '_humidity_set_point'
         self._attr_icon = 'mdi:cloud-percent'
-
-    @property
-    def name(self):
-        """Return de naam van de entiteit."""
-        return self._name
-
 
     @property
     def min_value(self):
@@ -48,6 +39,7 @@ class HarviaHumiditySetPoint(NumberEntity):
 
     async def async_added_to_hass(self):
         """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
+        await super().async_added_to_hass()
         self._device.humidityNumber = self
         await self._device.update_ha_devices()
 

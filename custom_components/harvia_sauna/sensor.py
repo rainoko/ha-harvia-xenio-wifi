@@ -1,24 +1,16 @@
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.const import PERCENTAGE
 from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
+from .entity import HarviaEntity
 
-class HarviaHumiditySensor(SensorEntity):
+class HarviaHumiditySensor(HarviaEntity, SensorEntity):
     """Representatie van een vochtigheidssensor."""
 
-    def __init__(self, device, name, sauna):
+    def __init__(self, device, sauna):
         """Initialiseer de humidity sensor."""
-        self._name = name + ' Humidity'
+        super().__init__(device, sauna, 'humidity_sensor', 'Humidity')
         self._state = None
-        self._device = device
-        self._device_id = device.id + '_humidity_sensor'
-        self._sauna = sauna
-        self._attr_unique_id = device.id + '_humidity_sensor'
         self._attr_icon = 'mdi:water-percent'
-
-    @property
-    def name(self):
-        """Return de naam van de sensor."""
-        return self._name
 
     @property
     def state(self):
@@ -32,21 +24,12 @@ class HarviaHumiditySensor(SensorEntity):
 
     async def async_added_to_hass(self):
         """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
+        await super().async_added_to_hass()
         self._device.humiditySensor = self
         await self._device.update_ha_devices()
 
     async def update_state(self):
         self.async_write_ha_state()
-
-
-    #@property
-    #def device_info(self):
-    #    """Return informatie over het aangesloten apparaat."""
-    #    return {
-    #        "identifiers": {(DOMAIN, self._device.id)},
-    #        "name": self._device.name,
-    #        "manufacturer": "Harvia",
-    #    }
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up de Harvia sensors."""

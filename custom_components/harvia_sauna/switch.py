@@ -1,21 +1,14 @@
 from homeassistant.components.switch import SwitchEntity
 from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
+from .entity import HarviaEntity
 from homeassistant.components.climate.const import HVACMode
 
-class HarviaPowerSwitch(SwitchEntity):
-    def __init__(self, device, name, sauna):
-        self._device = device
-        self._name = name + ' Power switch'
+class HarviaPowerSwitch(HarviaEntity, SwitchEntity):
+    def __init__(self, device, sauna):
+        super().__init__(device, sauna, 'power', 'Power switch')
         self._is_on = device.active
-        self._device_id = device.id + '_power'
-        self._sauna = sauna
-        self._attr_unique_id = device.id + '_power'
         self._attr_icon = 'mdi:heating-coil'
 
-
-    @property
-    def name(self):
-        return self._name
 
     @property
     def is_on(self):
@@ -26,13 +19,9 @@ class HarviaPowerSwitch(SwitchEntity):
         """Icon of the entity."""
         return "mdi:heater"
 
-    @property
-    def unique_id(self):
-        """Return een unieke ID."""
-        return self._device_id
-
     async def async_added_to_hass(self):
         """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
+        await super().async_added_to_hass()
         self._device.powerSwitch = self
         await self._device.update_ha_devices()
 
@@ -59,39 +48,25 @@ class HarviaPowerSwitch(SwitchEntity):
             self._device.thermostat._hvac_mode = HVACMode.OFF
             await self._device.thermostat.update_state()
 
-class HarviaLightSwitch(SwitchEntity):
-    def __init__(self, device, name, sauna):
-        self._device = device
-        self._name = name + ' Light Switch'
+class HarviaLightSwitch(HarviaEntity, SwitchEntity):
+    def __init__(self, device, sauna):
+        super().__init__(device, sauna, 'light', 'Light Switch')
         self._is_on = device.lightsOn
-        self._device_id = device.id + '_light'
-        self._sauna = sauna
-        self._attr_unique_id = device.id + '_light'
         self._attr_icon = 'mdi:lightbulb-multiple'
 
 
     async def async_added_to_hass(self):
         """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
+        await super().async_added_to_hass()
         self._device.lightSwitch = self
         await self._device.update_ha_devices()
-        #self._device.
 
     async def update_state(self):
         self.async_write_ha_state()
 
     @property
-    def name(self):
-        return self._name
-
-    @property
     def is_on(self):
         return self._is_on
-
-
-    @property
-    def unique_id(self):
-        """Return een unieke ID."""
-        return self._device_id
 
     async def async_turn_on(self, **kwargs):
         # Code om de sauna aan te zetten
@@ -103,39 +78,25 @@ class HarviaLightSwitch(SwitchEntity):
         await self._device.set_lights(False)
         self._is_on = False
 
-class HarviaSteamerSwitch(SwitchEntity):
-    def __init__(self, device, name, sauna):
-        self._device = device
-        self._name = name + ' Steamer Switch'
+class HarviaSteamerSwitch(HarviaEntity, SwitchEntity):
+    def __init__(self, device, sauna):
+        super().__init__(device, sauna, 'steamer', 'Steamer Switch')
         self._is_on = device.lightsOn
-        self._device_id = device.id + '_steamer'
-        self._sauna = sauna
-        self._attr_unique_id = device.id + '_steamer'
         self._attr_icon = 'mdi:wave'
 
 
     async def async_added_to_hass(self):
         """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
+        await super().async_added_to_hass()
         self._device.steamerSwitch = self
         await self._device.update_ha_devices()
-        #self._device.
 
     async def update_state(self):
         self.async_write_ha_state()
 
     @property
-    def name(self):
-        return self._name
-
-    @property
     def is_on(self):
         return self._is_on
-
-
-    @property
-    def unique_id(self):
-        """Return een unieke ID."""
-        return self._device_id
 
     async def async_turn_on(self, **kwargs):
         # Code om de sauna aan te zetten
@@ -147,39 +108,25 @@ class HarviaSteamerSwitch(SwitchEntity):
         await self._device.set_steamer(False)
         self._is_on = False
 
-class HarviaFanSwitch(SwitchEntity):
-    def __init__(self, device, name, sauna):
-        self._device = device
-        self._name = name + ' Fan Switch'
+class HarviaFanSwitch(HarviaEntity, SwitchEntity):
+    def __init__(self, device, sauna):
+        super().__init__(device, sauna, 'fan', 'Fan Switch')
         self._is_on = device.fanOn
-        self._device_id = device.id + '_fan'
-        self._sauna = sauna
-        self._attr_unique_id = device.id + '_fan'
         self._attr_icon = 'mdi:fan'
 
 
     async def async_added_to_hass(self):
         """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
+        await super().async_added_to_hass()
         self._device.fanSwitch = self
         await self._device.update_ha_devices()
-        #self._device.
 
     async def update_state(self):
         self.async_write_ha_state()
 
     @property
-    def name(self):
-        return self._name
-
-    @property
     def is_on(self):
         return self._is_on
-
-
-    @property
-    def unique_id(self):
-        """Return een unieke ID."""
-        return self._device_id
 
     async def async_turn_on(self, **kwargs):
         # Code om de sauna aan te zetten
@@ -205,4 +152,3 @@ async def async_setup_entry(hass, entry, async_add_entities):
             switches.append(device_switch)
 
     async_add_entities(switches, True)
-
