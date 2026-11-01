@@ -155,13 +155,13 @@ class HarviaDevice:
             await self.humidityNumber.update_state()
 
         if self.thermostat is not None:
-            self.thermostat._target_temperature = self.targetTemp
-            self.thermostat._current_temperature = self.currentTemp
+            self.thermostat._attr_target_temperature = self.targetTemp
+            self.thermostat._attr_current_temperature = self.currentTemp
 
             if self.active == True:
-                self.thermostat._hvac_mode = HVACMode.HEAT
+                self.thermostat._attr_hvac_mode = HVACMode.HEAT
             else:
-                self.thermostat._hvac_mode =  HVACMode.OFF
+                self.thermostat._attr_hvac_mode =  HVACMode.OFF
             await self.thermostat.update_state()
 
     def door_open(self) -> bool | None:

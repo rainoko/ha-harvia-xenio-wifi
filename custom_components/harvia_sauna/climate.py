@@ -1,43 +1,26 @@
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import HVACMode, ClimateEntityFeature
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
-from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
+from .constants import DOMAIN, _LOGGER
 from .entity import HarviaEntity
 
 class HarviaThermostat(HarviaEntity, ClimateEntity):
+    _attr_min_temp = 40
+    _attr_max_temp = 110
+    _attr_target_temperature_step = 1
+    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
+    _attr_supported_features = (
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.TURN_ON
+        | ClimateEntityFeature.TURN_OFF
+    )
+
     def __init__(self, device, sauna):
         super().__init__(device, sauna, 'termostat', 'Thermostat')
-        self._current_temperature = None
-        self._target_temperature = None
-        self._hvac_mode = HVACMode.OFF
-
-    @property
-    def min_temp(self):
-        return 40
-
-    @property
-    def max_temp(self):
-        return 110
-
-    @property
-    def temperature_unit(self):
-        return UnitOfTemperature.CELSIUS
-
-    @property
-    def current_temperature(self):
-        return self._current_temperature
-
-    @property
-    def target_temperature(self):
-        return self._target_temperature
-
-    @property
-    def hvac_mode(self):
-        return self._hvac_mode
-
-    @property
-    def hvac_modes(self):
-        return [HVACMode.OFF, HVACMode.HEAT]
+        self._attr_current_temperature = None
+        self._attr_target_temperature = None
+        self._attr_hvac_mode = HVACMode.OFF
 
     async def async_added_to_hass(self):
         """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
@@ -48,45 +31,33 @@ class HarviaThermostat(HarviaEntity, ClimateEntity):
     async def async_set_temperature(self, **kwargs):
         """Stel de doeltemperatuur in."""
         if (temperature := kwargs.get(ATTR_TEMPERATURE)) is not None:
-            self._target_temperature = temperature
-            # Hier de logica om de doeltemperatuur in je apparaat te wijzigen
-            await self._device.set_target_temperature(temperature)
+            self._attr_target_temperature = temperature
+            await self._device.set_target_temperature(int(temperature))
             self.async_write_ha_state()
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Stel de HVAC-modus in."""
-        active = False
-        self._hvac_mode = hvac_mode
+        active = hvac_mode == HVACMode.HEAT
+        self._attr_hvac_mode = hvac_mode
         self.async_write_ha_state()
 
-        if hvac_mode == HVACMode.HEAT:
-            await self._device.set_active(True)
-            active = True
-        elif hvac_mode == HVACMode.OFF:
-            await self._device.set_active(False)
-            active = False
+        await self._device.set_active(active)
 
         if self._device.powerSwitch is not None:
             self._device.powerSwitch._is_on = active
             await self._device.powerSwitch.update_state()
 
-    @property
-    def supported_features(self):
-        return ClimateEntityFeature.TARGET_TEMPERATURE
+    async def async_turn_on(self):
+        await self.async_set_hvac_mode(HVACMode.HEAT)
+
+    async def async_turn_off(self):
+        await self.async_set_hvac_mode(HVACMode.OFF)
 
     async def update_state(self):
         self.async_write_ha_state()
 
-    async def async_update(self):
-        """Update de huidige staat van de thermostaat."""
-        # Hier de logica om de huidige temperatuur en doeltemperatuur van je apparaat op te halen
-        #self._current_temperature = await self._device.fetch_current_temperature()
-        #self._target_temperature = await self._device.fetch_target_temperature()
-
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up de Harvia theromostats."""
-    # Hier zou je de logica toevoegen om je apparaten op te halen.
-    # Voor nu voegen we handmatig een schakelaar toe als voorbeeld.
     devices = await hass.data[DOMAIN]['api'].get_devices()
     theromostats = []
 

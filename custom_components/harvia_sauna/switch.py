@@ -35,7 +35,7 @@ class HarviaPowerSwitch(HarviaEntity, SwitchEntity):
 
         await self._device.set_active(True)
         if self._device.thermostat is not None:
-            self._device.thermostat._hvac_mode = HVACMode.HEAT
+            self._device.thermostat._attr_hvac_mode = HVACMode.HEAT
             await self._device.thermostat.update_state()
 
     async def async_turn_off(self, **kwargs):
@@ -45,7 +45,7 @@ class HarviaPowerSwitch(HarviaEntity, SwitchEntity):
 
         await self._device.set_active(False)
         if self._device.thermostat is not None:
-            self._device.thermostat._hvac_mode = HVACMode.OFF
+            self._device.thermostat._attr_hvac_mode = HVACMode.OFF
             await self._device.thermostat.update_state()
 
 class HarviaLightSwitch(HarviaEntity, SwitchEntity):
