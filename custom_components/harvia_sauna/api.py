@@ -1,4 +1,6 @@
 from pycognito import Cognito
+import aiohttp
+import asyncio
 import boto3
 import logging
 import json
@@ -6,12 +8,19 @@ import re
 import base64
 import botocore.exceptions
 from urllib.parse import quote
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .constants import DOMAIN, REGION
 
 _LOGGER = logging.getLogger('custom_component.harvia_sauna')
 AUTH_ERROR_CODES = ("NotAuthorizedException", "UserNotFoundException")
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
+
+
+class HarviaApiError(HomeAssistantError):
+    """Error communicating with the Harvia cloud API."""
+
 
 class HarviaSaunaAPI:
     def __init__(self, username, password, hass):
@@ -27,17 +36,23 @@ class HarviaSaunaAPI:
         _LOGGER.debug("Fetching endpoints.")
 
         if self.endpoints is None:
-            self.endpoints = {}
+            fetched = {}
             session = async_get_clientsession(self.hass)
             endpoints = ["users", "device", "events", "data"]
             for endpoint in endpoints:
                 url = f'https://prod.myharvia-cloud.net/{endpoint}/endpoint'
                 _LOGGER.debug(f"Fetching endpoint: {url}")
-                async with session.get(url) as response:
-                    self.endpoints[endpoint] = await response.json()
-                    data_string = json.dumps(self.endpoints[endpoint], indent=4)
-                    _LOGGER.debug(f"Received data: {data_string}")
+                try:
+                    async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                        response.raise_for_status()
+                        fetched[endpoint] = await response.json()
+                except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
+                    raise HarviaApiError(f"Failed to fetch endpoint {url}: {err}") from err
+                data_string = json.dumps(fetched[endpoint], indent=4)
+                _LOGGER.debug(f"Received data: {data_string}")
 
+            # Only store once all endpoints were fetched, so a failure is retried.
+            self.endpoints = fetched
             _LOGGER.info("Endpoints successfully fetched and saved.")
         else:
             _LOGGER.info("Endpoints already exist and were not fetched.")
@@ -132,11 +147,22 @@ class HarviaSaunaAPI:
         queryDump = json.dumps(query, indent=4)
         _LOGGER.debug("Endpoint request on '" + url + "':")
         _LOGGER.debug("\tQuery:" + queryDump)
-        async with session.post(url, json=query, headers=headers) as response:
-            data = await response.json()
-            dataString = json.dumps(data, indent=4)
-            _LOGGER.debug(f"\tReturned data: {dataString}")
-            return data
+        try:
+            async with session.post(url, json=query, headers=headers, timeout=REQUEST_TIMEOUT) as response:
+                response.raise_for_status()
+                data = await response.json()
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
+            raise HarviaApiError(f"Request to {endpoint} endpoint failed: {err}") from err
+
+        dataString = json.dumps(data, indent=4)
+        _LOGGER.debug(f"\tReturned data: {dataString}")
+
+        if not isinstance(data, dict) or data.get('data') is None:
+            errors = data.get('errors') if isinstance(data, dict) else data
+            raise HarviaApiError(f"{endpoint} endpoint returned no data: {errors}")
+        if data.get('errors'):
+            _LOGGER.warning(f"{endpoint} endpoint returned errors: {data['errors']}")
+        return data
 
     async def getWebsocketEndpoint(self, endpoint: str) -> dict:
         endpoint = self.endpoints[endpoint]['endpoint']

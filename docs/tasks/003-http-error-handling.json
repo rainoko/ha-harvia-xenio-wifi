@@ -1,5 +1,5 @@
 {
   "name": "http-error-handling",
   "description": "HarviaSaunaAPI.endpoint() and getEndpoints() have no timeouts, no HTTP status checks and assume JSON responses. Add timeouts, raise_for_status and a dedicated exception type the integration can handle.",
-  "status": "todo"
+  "status": "done"
 }

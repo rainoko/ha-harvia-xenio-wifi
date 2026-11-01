@@ -16,7 +16,7 @@ from .switch import HarviaPowerSwitch, HarviaLightSwitch, HarviaFanSwitch, Harvi
 from .climate import HarviaThermostat
 from .sensor import HarviaHumiditySensor
 from .number import HarviaHumiditySetPoint
-from .api import HarviaSaunaAPI
+from .api import HarviaSaunaAPI, HarviaApiError
 from .binary_sensor import HarviaDoorSensor
 from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
 from homeassistant.core import HomeAssistant
@@ -628,6 +628,7 @@ async def async_setup_entry(hass, entry):
     try:
         authenticated = await harvia_sauna.async_setup(entry)
     except (
+        HarviaApiError,
         aiohttp.ClientError,
         asyncio.TimeoutError,
         botocore.exceptions.BotoCoreError,
