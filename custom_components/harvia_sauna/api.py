@@ -52,7 +52,7 @@ class HarviaSaunaAPI:
         u = await self.getClient()
         """Authenticateert met de service en slaat de tokens op."""
         _LOGGER.debug("Authenticating")
-        _LOGGER.debug("Using username: " + self.username + ' - with password:"'+self.password+ "'")
+        _LOGGER.debug("Using username: " + self.username)
 
         try:
             await self.hass.async_add_executor_job(
@@ -70,8 +70,6 @@ class HarviaSaunaAPI:
         }
 
         _LOGGER.info("Authentication successful, tokens saved.")
-        data_string = json.dumps( self.token_data, indent=4)
-        _LOGGER.debug(f"Token data: {data_string}")
 
         return True
 
@@ -109,7 +107,7 @@ class HarviaSaunaAPI:
         }
 
         if current_id_token != client.id_token:
-            _LOGGER.debug(f"Token renewed! {current_id_token} != {client.id_token}")
+            _LOGGER.debug("Token renewed")
 
     async def getIdToken(self) -> str:
         await self.checkAndRenewTokens()

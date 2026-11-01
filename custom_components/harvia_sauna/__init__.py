@@ -302,7 +302,7 @@ class HarviaWebsock:
 
             url = await self.sauna.api.getWebsockUrlByEndpoint(self.endpoint)
             payload = {'type': 'connection_init'}
-            _LOGGER.debug(f"wssUrl: {url}")
+            _LOGGER.debug(f"Connecting websocket {self.endpoint}: {endpoint['wssUrl']}")
 
             async with websockets.connect(url,  subprotocols=["graphql-ws"],) as self.websocket:
                 self.reconnect_attempts = 0
@@ -349,7 +349,7 @@ class HarviaWebsock:
                     }
 
         message = json.dumps(payload)
-        _LOGGER.debug(f"Websock "+self.endpoint+ f" send subscription: {message}")
+        _LOGGER.debug(f"Websock "+self.endpoint+ f" send subscription: {data}")
 
         await self.websocket.send(message)
 
@@ -606,8 +606,6 @@ class HarviaSauna:
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Setup de Harvia Sauna integratie."""
-    boto3.set_stream_logger('custom_component.harvia_sauna')
-
     return True
 
 async def async_setup_entry(hass, entry):
