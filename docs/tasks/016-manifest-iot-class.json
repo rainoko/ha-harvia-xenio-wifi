@@ -1,0 +1,5 @@
+{
+  "name": "manifest-iot-class",
+  "description": "Add \"iot_class\": \"cloud_push\" and \"loggers\" to manifest.json; consider a minimum \"homeassistant\" version in hacs.json. Update codeowners for the fork.",
+  "status": "todo"
+}

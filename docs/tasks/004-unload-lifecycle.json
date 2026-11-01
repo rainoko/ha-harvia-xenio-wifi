@@ -1,0 +1,5 @@
+{
+  "name": "unload-lifecycle",
+  "description": "async_unload_entry never stops the four websocket tasks, disconnect_periodically tasks or the check_connections loop, so reloads leak duplicate connections and tasks run during shutdown. Track tasks via entry.async_create_background_task / async_on_unload, cancel on unload, use async_unload_platforms and return its result, clean up hass.data.",
+  "status": "todo"
+}

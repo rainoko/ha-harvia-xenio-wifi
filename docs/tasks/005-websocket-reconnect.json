@@ -1,0 +1,5 @@
+{
+  "name": "websocket-reconnect",
+  "description": "Each check_connections reconnect spawns another disconnect_periodically loop (duplicates pile up). start() only catches ConnectionClosedError/TimeoutError, so ConnectionClosedOK, InvalidStatus, OSError or token-refresh errors kill the task. Replace with a single supervised reconnect loop per subscription with backoff and periodic reconnect.",
+  "status": "todo"
+}

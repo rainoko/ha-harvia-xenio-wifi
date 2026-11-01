@@ -1,0 +1,5 @@
+{
+  "name": "sensor-entity-modern-api",
+  "description": "HarviaHumiditySensor overrides state/unit_of_measurement. Use native_value, native_unit_of_measurement, device_class HUMIDITY and state_class MEASUREMENT so long-term statistics work. Consider adding temperature, remaining time and wifi RSSI sensors from existing data.",
+  "status": "todo"
+}

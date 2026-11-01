@@ -1,0 +1,5 @@
+{
+  "name": "base-entity-device-info",
+  "description": "Create a shared base entity: should_poll=False, device_info so a device appears in HA, has_entity_name, and available reflecting cloud connection state. Keep all existing unique_ids unchanged so entities, history and automations survive.",
+  "status": "todo"
+}

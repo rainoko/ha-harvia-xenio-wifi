@@ -1,0 +1,5 @@
+{
+  "name": "translate-comments-english",
+  "description": "Code comments, docstrings and log messages are a mix of Dutch and English. Translate to English for consistency.",
+  "status": "todo"
+}

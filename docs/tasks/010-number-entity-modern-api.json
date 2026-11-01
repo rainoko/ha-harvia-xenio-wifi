@@ -1,0 +1,5 @@
+{
+  "name": "number-entity-modern-api",
+  "description": "HarviaHumiditySetPoint uses the pre-2022.7 NumberEntity API (value, min_value, max_value, step, async_set_value). Migrate to native_value / native_min_value / native_max_value / native_step / async_set_native_value and fix max humidity (140% is not valid).",
+  "status": "todo"
+}

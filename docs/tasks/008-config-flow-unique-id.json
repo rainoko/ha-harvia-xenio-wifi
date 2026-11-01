@@ -1,0 +1,5 @@
+{
+  "name": "config-flow-unique-id",
+  "description": "Config flow has no unique_id and doesn't catch network exceptions during validation (shows 'unknown error'). Set unique_id from username, abort if already configured, map exceptions to cannot_connect / invalid_auth / unknown.",
+  "status": "todo"
+}

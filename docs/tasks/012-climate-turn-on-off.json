@@ -1,0 +1,5 @@
+{
+  "name": "climate-turn-on-off",
+  "description": "HarviaThermostat lacks ClimateEntityFeature.TURN_ON / TURN_OFF, so climate.turn_on/turn_off don't work. Add features and async_turn_on/async_turn_off; use _attr_* style attributes.",
+  "status": "todo"
+}

@@ -1,0 +1,5 @@
+{
+  "name": "switch-state-fixes",
+  "description": "Light, steamer and fan switches don't write state after toggling (UI waits for websocket echo). HarviaSteamerSwitch initial state uses device.lightsOn instead of steamOn (switch.py:110, copy-paste bug).",
+  "status": "todo"
+}
