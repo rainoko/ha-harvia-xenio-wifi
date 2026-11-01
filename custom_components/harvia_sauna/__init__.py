@@ -18,6 +18,7 @@ from .sensor import HarviaHumiditySensor
 from .number import HarviaHumiditySetPoint
 from .api import HarviaSaunaAPI, HarviaApiError
 from .binary_sensor import HarviaDoorSensor
+from .config_flow import unique_id_for
 from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -608,6 +609,10 @@ async def async_setup_entry(hass, entry):
 
     if not username or not password:
         raise ConfigEntryAuthFailed("Username or password not configured.")
+
+    if entry.unique_id is None:
+        # Entries created before unique IDs were introduced
+        hass.config_entries.async_update_entry(entry, unique_id=unique_id_for(username))
 
     storage = Store(hass, STORAGE_VERSION, STORAGE_KEY)
     harvia_sauna = HarviaSauna(hass, storage, entry)

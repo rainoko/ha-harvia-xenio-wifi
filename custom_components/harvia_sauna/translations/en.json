@@ -24,12 +24,12 @@
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect, please check your credentials.",
+      "cannot_connect": "Failed to connect to the Harvia cloud, please try again later.",
       "invalid_auth": "Invalid authentication, please try again.",
       "unknown": "An unknown error occurred."
     },
     "abort": {
-      "already_configured": "Device is already configured",
+      "already_configured": "This Harvia account is already configured.",
       "single_instance_allowed": "Harvia Sauna is already configured.",
       "reauth_successful": "Re-authentication was successful.",
       "reconfigure_successful": "Credentials were updated successfully."

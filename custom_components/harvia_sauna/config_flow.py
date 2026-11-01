@@ -1,11 +1,17 @@
 from collections.abc import Mapping
 from typing import Any
 
+import botocore.exceptions
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_USERNAME, CONF_PASSWORD
-from .api import HarviaSaunaAPI
-from .constants import DOMAIN  # Zorg ervoor dat je een const.py hebt met je DOMAIN
+from .api import HarviaSaunaAPI, HarviaApiError
+from .constants import DOMAIN, _LOGGER
+
+
+def unique_id_for(username: str) -> str:
+    """Config entry unique ID: the Harvia account e-mail, case-insensitive."""
+    return username.strip().lower()
 
 class HarviaSaunaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for your_component."""
@@ -16,8 +22,15 @@ class HarviaSaunaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _async_validate(self, username: str, password: str) -> dict:
         """Try to log in; return form errors (empty when the credentials work)."""
         api = HarviaSaunaAPI(username, password, self.hass)
-        if not await api.authenticate():
-            return {"base": "invalid_auth"}
+        try:
+            if not await api.authenticate():
+                return {"base": "invalid_auth"}
+        except (HarviaApiError, botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as err:
+            _LOGGER.warning("Unable to connect to Harvia cloud: %s", err)
+            return {"base": "cannot_connect"}
+        except Exception:  # Show a form error instead of a broken flow
+            _LOGGER.exception("Unexpected error while validating Harvia credentials")
+            return {"base": "unknown"}
         return {}
 
     async def async_step_user(self, user_input=None):
@@ -30,6 +43,8 @@ class HarviaSaunaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Verwerk ingevulde gegevens
         if user_input is not None:
+            await self.async_set_unique_id(unique_id_for(user_input[CONF_USERNAME]))
+            self._abort_if_unique_id_configured()
             errors = await self._async_validate(user_input[CONF_USERNAME], user_input[CONF_PASSWORD])
             if not errors:
                 return self.async_create_entry(title="Harvia Sauna", data=user_input)
@@ -75,7 +90,11 @@ class HarviaSaunaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             errors = await self._async_validate(user_input[CONF_USERNAME], user_input[CONF_PASSWORD])
             if not errors:
-                return self.async_update_reload_and_abort(entry, data_updates=user_input)
+                return self.async_update_reload_and_abort(
+                    entry,
+                    unique_id=unique_id_for(user_input[CONF_USERNAME]),
+                    data_updates=user_input,
+                )
 
         return self.async_show_form(
             step_id="reconfigure",
