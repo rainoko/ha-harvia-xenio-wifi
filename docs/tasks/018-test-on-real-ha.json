@@ -1,5 +1,5 @@
 {
   "name": "test-on-real-ha",
   "description": "After the refactor, verify locally that the integration imports and loads in a dev HA instance, then test on the real sauna with debug logging: login, all entities, controls, websocket reconnect, reload/unload, reauth.",
-  "status": "progress"
+  "status": "done"
 }
