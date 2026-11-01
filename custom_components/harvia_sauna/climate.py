@@ -38,10 +38,9 @@ class HarviaThermostat(HarviaEntity, ClimateEntity):
     async def async_set_hvac_mode(self, hvac_mode):
         """Stel de HVAC-modus in."""
         active = hvac_mode == HVACMode.HEAT
+        await self._device.set_active(active)
         self._attr_hvac_mode = hvac_mode
         self.async_write_ha_state()
-
-        await self._device.set_active(active)
 
         if self._device.powerSwitch is not None:
             self._device.powerSwitch._is_on = active
