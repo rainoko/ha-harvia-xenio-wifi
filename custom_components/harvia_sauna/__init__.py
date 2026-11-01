@@ -14,7 +14,7 @@ import botocore.exceptions
 
 from .switch import HarviaPowerSwitch, HarviaLightSwitch, HarviaFanSwitch, HarviaSteamerSwitch
 from .climate import HarviaThermostat
-from .sensor import HarviaHumiditySensor
+from .sensor import HarviaSensor, SENSORS
 from .number import HarviaHumiditySetPoint
 from .api import HarviaSaunaAPI, HarviaApiError
 from .binary_sensor import HarviaDoorSensor
@@ -51,6 +51,7 @@ class HarviaDevice:
         self.currentTemp = None
         self.humidity = None
         self.remainingTime = None
+        self.wifiRssi = None
         self.heatUpTime = 0
         self.targetRh = 0
         self.onTime = 0
@@ -64,7 +65,6 @@ class HarviaDevice:
         self.doorSensor = None
         self.thermostat = None
         self.binarySensors = None
-        self.humiditySensor = None
         self.humidityNumber = None
         self.sensors = None
         self.numbers = None
@@ -100,6 +100,8 @@ class HarviaDevice:
             self.heatUpTime = data['heatUpTime']
         if 'remainingTime' in data:
             self.remainingTime = data['remainingTime']
+        if 'wifiRSSI' in data:
+            self.wifiRssi = data['wifiRSSI']
         if 'temperature' in data:
             self.currentTemp = data['temperature']
         if 'humidity' in data:
@@ -144,9 +146,9 @@ class HarviaDevice:
                 self.doorSensor._state = STATE_OFF
             await self.doorSensor.update_state()
 
-        if self.humiditySensor is not None:
-            self.humiditySensor._state = self.humidity
-            await self.humiditySensor.update_state()
+        for sensor in self.sensors or []:
+            if sensor.added:
+                await sensor.update_state()
 
         if self.humidityNumber is not None:
             self.humidityNumber._state = self.targetRh
@@ -225,8 +227,8 @@ class HarviaDevice:
 
         self.sensors = []
 
-        humiditySensor = HarviaHumiditySensor(device=self, sauna=self.sauna)
-        self.sensors.append(humiditySensor)
+        for description in SENSORS:
+            self.sensors.append(HarviaSensor(device=self, sauna=self.sauna, description=description))
 
         return self.sensors
 

@@ -1,32 +1,81 @@
-from homeassistant.components.sensor import SensorEntity
-from homeassistant.const import PERCENTAGE
-from .constants import DOMAIN, STORAGE_KEY, STORAGE_VERSION, REGION,_LOGGER
+from dataclasses import dataclass
+
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
+from homeassistant.const import (
+    PERCENTAGE,
+    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    EntityCategory,
+    UnitOfTemperature,
+    UnitOfTime,
+)
+from .constants import DOMAIN, _LOGGER
 from .entity import HarviaEntity
 
-class HarviaHumiditySensor(HarviaEntity, SensorEntity):
-    """Representatie van een vochtigheidssensor."""
 
-    def __init__(self, device, sauna):
-        """Initialiseer de humidity sensor."""
-        super().__init__(device, sauna, 'humidity_sensor', 'Humidity')
-        self._state = None
-        self._attr_icon = 'mdi:water-percent'
+@dataclass(frozen=True, kw_only=True)
+class HarviaSensorEntityDescription(SensorEntityDescription):
+    """Sensor description; value_attr names the HarviaDevice attribute holding the value."""
+
+    value_attr: str
+
+
+# The key is used as unique ID suffix; 'humidity_sensor' must stay as-is for existing installs.
+SENSORS = (
+    HarviaSensorEntityDescription(
+        key="humidity_sensor",
+        name="Humidity",
+        value_attr="humidity",
+        icon="mdi:water-percent",
+        device_class=SensorDeviceClass.HUMIDITY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+    ),
+    HarviaSensorEntityDescription(
+        key="temperature_sensor",
+        name="Temperature",
+        value_attr="currentTemp",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+    ),
+    HarviaSensorEntityDescription(
+        key="remaining_time",
+        name="Remaining time",
+        value_attr="remainingTime",
+        icon="mdi:timer-sand",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+    ),
+    HarviaSensorEntityDescription(
+        key="wifi_rssi",
+        name="WiFi signal",
+        value_attr="wifiRssi",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+)
+
+
+class HarviaSensor(HarviaEntity, SensorEntity):
+    """A read-only value reported by the sauna."""
+
+    entity_description: HarviaSensorEntityDescription
+
+    def __init__(self, device, sauna, description: HarviaSensorEntityDescription):
+        super().__init__(device, sauna, description.key, description.name)
+        self.entity_description = description
 
     @property
-    def state(self):
-        """Return de staat van de sensor."""
-        return self._state
-
-    @property
-    def unit_of_measurement(self):
-        """Return de eenheid die wordt gebruikt."""
-        return PERCENTAGE
-
-    async def async_added_to_hass(self):
-        """Acties die uitgevoerd moeten worden als entiteit aan HA is toegevoegd."""
-        await super().async_added_to_hass()
-        self._device.humiditySensor = self
-        await self._device.update_ha_devices()
+    def native_value(self):
+        return getattr(self._device, self.entity_description.value_attr)
 
     async def update_state(self):
         self.async_write_ha_state()
