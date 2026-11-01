@@ -1,6 +1,5 @@
 from __future__ import annotations
 import json
-import logging
 import asyncio
 import signal
 import websockets
@@ -32,7 +31,6 @@ from homeassistant.const import STATE_ON, STATE_OFF, CONF_USERNAME, CONF_PASSWOR
 from pycognito import Cognito
 import boto3
 
-_LOGGER = logging.getLogger('custom_component.harvia_sauna')
 ENTITY_TYPES = [ 'switch', 'climate',  'binary_sensor', 'sensor', 'number']
 # Consecutive failed reconnects before a websocket counts as down; planned reconnects don't count.
 UNHEALTHY_AFTER_ATTEMPTS = 3

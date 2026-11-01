@@ -1,5 +1,5 @@
 {
   "name": "fix-logger-name",
   "description": "Logger is named 'custom_component.harvia_sauna' (missing s), so HA logger config for custom_components.harvia_sauna has no effect. Use logging.getLogger(__name__) and define it in one place.",
-  "status": "todo"
+  "status": "done"
 }
